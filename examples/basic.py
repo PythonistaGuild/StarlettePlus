@@ -28,7 +28,8 @@ class App(starlette_plus.Application):
         # Add the ratelimiter middleware to the application
         # This allows global and per-route rate limiting
         # You can use this with Redis or in-memory storage
-        ratelimiter = Middleware(starlette_plus.middleware.RatelimitMiddleware)
+        # Set ignore_localhost to False if you want to rate limit localhost requests (Set to False for Testing)
+        ratelimiter = Middleware(starlette_plus.middleware.RatelimitMiddleware, ignore_localhost=False)
 
         # We set a prefix which means all routes will be prefixed with /v1
         super().__init__(prefix="/v1", middleware=[ratelimiter], access_log=True)
