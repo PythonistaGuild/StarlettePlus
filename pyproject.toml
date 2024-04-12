@@ -97,7 +97,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.pyright]
-exclude = ["venv"]
+exclude = ["venv", "examples/"]
 useLibraryCodeForTypes = true
 typeCheckingMode = "strict"
 reportImportCycles = false
