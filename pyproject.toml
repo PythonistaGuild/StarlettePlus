@@ -26,7 +26,7 @@ classifiers = [
 "Homepage" = "https://github.com/PythonistaGuild/StarlettePlus"
 
 [tool.setuptools]
-packages = ["starlette_plus", "starlette_plus.types_"]
+packages = ["starlette_plus", "starlette_plus.types_", "starlette_plus.middleware"]
 
 [tool.setuptools.package-data]
 starlette_plus = ["py.typed"]
