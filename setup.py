@@ -5,7 +5,7 @@ from setuptools import setup
 
 def get_version() -> str:
     version = ""
-    with open("starlete_plus/__init__.py") as f:
+    with open("starlette_plus/__init__.py") as f:
         match = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE)
 
     if not match or not match.group(1):
