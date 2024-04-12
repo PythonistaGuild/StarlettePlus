@@ -74,7 +74,8 @@ class RatelimitMiddleware:
         route: Route | None = None
 
         for r in routes:
-            if r.path == request.url.path:
+            methods: set[str] = r.methods or set()
+            if r.path == request.url.path and request.method in methods:
                 route = r
                 break
 
