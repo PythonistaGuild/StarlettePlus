@@ -100,7 +100,7 @@ class RatelimitMiddleware:
                 # forwarded or client.host will exist at this point...
                 key: str = forwarded.split(",")[0] if forwarded else request.client.host  # type: ignore
 
-                if self._ignore_local and key not in ("127.0.0.1", "::1", "localhost", "0.0.0.0"):
+                if self._ignore_local and key in ("127.0.0.1", "::1", "localhost", "0.0.0.0"):
                     return await self.app(scope, receive, send)
             else:
                 key: str | None = await bucket(request)
