@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Coroutine, Iterator
 from typing import TYPE_CHECKING, Any, Self, TypeAlias, TypedDict, Unpack
 
 from starlette.applications import Starlette
@@ -47,6 +47,8 @@ class ApplicationOptions(TypedDict, total=False):
     views: list[View]
     access_log: bool
     middleware: list[Middleware]
+    on_startup: list[Callable[[], Coroutine[Any, Any, None]]]
+    on_shutdown: list[Callable[[], Coroutine[Any, Any, None]]]
 
 
 __all__ = ("Application", "View", "route", "limit")
