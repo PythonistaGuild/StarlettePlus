@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, Self, TypeAlias, TypedDict, Unpack
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import Route, WebSocketRoute
+from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.types import Receive, Scope, Send
 from starlette.websockets import WebSocket
 
@@ -49,6 +49,7 @@ class ApplicationOptions(TypedDict, total=False):
     middleware: list[Middleware]
     on_startup: list[Callable[[], Coroutine[Any, Any, None]]]
     on_shutdown: list[Callable[[], Coroutine[Any, Any, None]]]
+    routes: list[Route | WebSocketRoute | Mount]
 
 
 __all__ = ("Application", "View", "route", "limit")
