@@ -19,7 +19,7 @@ import asyncio
 import inspect
 import logging
 from collections.abc import Callable, Coroutine, Iterator, Sequence
-from typing import TYPE_CHECKING, Any, Self, TypeAlias, TypedDict, Unpack
+from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeAlias, TypedDict, Unpack
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -223,10 +223,15 @@ class Application(Starlette):
 
 class View:
     __routes__: list[Route | WebSocketRoute]
+    __prefix__: ClassVar[str | None] = None
+
+    def __init_subclass__(cls, *, prefix: str | None = None) -> None:
+        cls.__prefix__ = prefix
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         self = super().__new__(cls)
         name = cls.__name__
+        prefix = cls.__prefix__ or name
 
         self.__routes__ = []
 
@@ -235,7 +240,7 @@ class View:
             path: str = member._path
 
             if member._prefix:
-                path = f"/{name.lower()}/{path.lstrip('/')}"
+                path = f"/{prefix.lower()}/{path.lstrip('/')}"
 
             for method in member._methods:
                 method = method.lower()
