@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
+from starlette.routing import NoMatchFound, Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ..limiter import RateLimit, Store
@@ -28,7 +28,7 @@ from ..redis import Redis
 
 
 if TYPE_CHECKING:
-    from starlette.routing import Mount, WebSocketRoute
+    from starlette.routing import Match, Mount, WebSocketRoute
     from starlette.types import ASGIApp, Receive, Scope, Send
 
     from ..redis import Redis
@@ -69,7 +69,8 @@ class RatelimitMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
-            return await self.app(scope, receive, send)
+            await self.app(scope, receive, send)
+            return
 
         request: Request = Request(scope)
         forwarded: str | None = request.headers.get("X-Forwarded-For", None)
@@ -78,8 +79,18 @@ class RatelimitMiddleware:
         route: Route | Mount | WebSocketRoute | None = None
 
         for r in routes:
+            matches: tuple[Match, Scope] = r.matches(scope=scope)
+            match_: Scope = matches[1]
+            if not match_:
+                continue
+
+            try:
+                r_path: str = r.url_path_for(str(r.name), **match_.get("path_params", {}))
+            except NoMatchFound:
+                continue
+
             methods: set[str] | None = r.methods if isinstance(r, Route) else None
-            if r.path != request.url.path:
+            if r_path != request.url.path:
                 continue
 
             if not methods or request.method in methods:
