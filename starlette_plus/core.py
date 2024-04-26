@@ -19,21 +19,19 @@ import asyncio
 import inspect
 import logging
 from collections.abc import Callable, Coroutine, Iterator, Sequence
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeAlias, TypedDict, Unpack
 
 from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.middleware import Middleware
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.types import Receive, Scope, Send
-from starlette.websockets import WebSocket
 
 from .types_.core import RouteCoro
 
 
 if TYPE_CHECKING:
-    from starlette.middleware import Middleware
-    from starlette.types import Message, Receive, Scope, Send
+    from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
     from .types_.core import Methods, RouteOptions
     from .types_.limiter import BucketType, ExemptCallable, RateLimitData
@@ -55,6 +53,34 @@ class ApplicationOptions(TypedDict, total=False):
 __all__ = ("Application", "View", "route", "limit")
 
 
+class LoggingMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        method: str = scope["method"]
+        path: str = scope["path"]
+        client: str = f"{scope['client'][0]}:{scope['client'][1]}"
+        version: str = scope["http_version"]
+
+        async def inspect_response(message: Message) -> None:
+            nonlocal method, path, client, version
+
+            if message["type"] == "http.response.start":
+                status_code: int = message.get("status", 200)
+                msg: str = f'{client} - "{method} {path} HTTP/{version}" '
+
+                access_logger.info(msg, extra={"status": status_code})
+
+            await send(message)
+
+        await self.app(scope, receive, inspect_response)
+
+
 class _Route:
     def __init__(self, **kwargs: Unpack[RouteOptions]) -> None:
         self._path: str = kwargs["path"]
@@ -64,17 +90,6 @@ class _Route:
         self._limits: list[RateLimitData] = kwargs.get("limits", [])
         self._is_websocket: bool = kwargs.get("websocket", False)
         self._view: View | None = None
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Response | None:
-        request: Request | WebSocket = (
-            WebSocket(scope, receive, send) if scope["type"] == "websocket" else Request(scope, receive, send)
-        )
-
-        response: Response | None = await self._coro(self._view, request)
-        if response is None:
-            response = Response(status_code=500, content="Internal Server Error")
-
-        await response(scope, receive, send)
 
 
 LimitDecorator: TypeAlias = Callable[..., RouteCoro] | _Route
@@ -144,7 +159,10 @@ class Application(Starlette):
         self._access_log: bool = kwargs.pop("access_log", True)
         views: list[View] = kwargs.pop("views", [])
 
-        super().__init__(*args, **kwargs)  # type: ignore
+        middleware_: list[Middleware] = kwargs.pop("middleware", [])
+        middleware_.insert(0, Middleware(LoggingMiddleware)) if self._access_log else None
+
+        super().__init__(*args, **kwargs, middleware=middleware_)  # type: ignore
 
         self.add_view(self)
         for view in views:
@@ -167,38 +185,22 @@ class Application(Starlette):
                 setattr(member, method, member._coro)
 
             new: WebSocketRoute | Route
+            endpoint: partial[RouteCoro] = partial(member._coro, self)
 
             if member._is_websocket:
-                new = WebSocketRoute(path=path, endpoint=member, name=f"{name}.{member._coro.__name__}")
+                new = WebSocketRoute(path=path, endpoint=endpoint, name=f"{name}.{member._coro.__name__}")
             else:
-                new = Route(path=path, endpoint=member, methods=member._methods, name=f"{name}.{member._coro.__name__}")
+                new = Route(
+                    path=path,
+                    endpoint=endpoint,
+                    methods=member._methods,
+                    name=f"{name}.{member._coro.__name__}",
+                )
 
             new.limits = getattr(member, "_limits", [])  # type: ignore
             self.__routes__.append(new)
 
         return self
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not self._access_log:
-            return await super().__call__(scope, receive, send)
-
-        method: str = scope["method"]
-        path: str = scope["path"]
-        client: str = f"{scope['client'][0]}:{scope['client'][1]}"
-        version: str = scope["http_version"]
-
-        async def inspect_response(message: Message) -> None:
-            nonlocal method, path, client
-
-            if message["type"] == "http.response.start":
-                status_code: int = message.get("status", 200)
-                msg: str = f'{client} - "{method} {path} HTTP/{version}" '
-
-                access_logger.info(msg, extra={"status": status_code})
-
-            await send(message)
-
-        await super().__call__(scope, receive, inspect_response)
 
     @property
     def prefix(self) -> str:
@@ -225,7 +227,7 @@ class Application(Starlette):
                 new = Route(path, endpoint=route_.endpoint, methods=methods, name=route_.name)
 
             new.limits = route_.limits  # type: ignore
-            self.router.routes.append(new)
+            self.routes.append(new)
 
         if isinstance(view, View):
             self._views.append(view)
@@ -259,11 +261,17 @@ class View:
                 setattr(member, method, member._coro)
 
             new: WebSocketRoute | Route
+            endpoint: partial[RouteCoro] = partial(member._coro, self)
 
             if member._is_websocket:
-                new = WebSocketRoute(path=path, endpoint=member, name=f"{name}.{member._coro.__name__}")
+                new = WebSocketRoute(path=path, endpoint=endpoint, name=f"{name}.{member._coro.__name__}")
             else:
-                new = Route(path=path, endpoint=member, methods=member._methods, name=f"{name}.{member._coro.__name__}")
+                new = Route(
+                    path=path,
+                    endpoint=endpoint,
+                    methods=member._methods,
+                    name=f"{name}.{member._coro.__name__}",
+                )
 
             new.limits = getattr(member, "_limits", [])  # type: ignore
             self.__routes__.append(new)
