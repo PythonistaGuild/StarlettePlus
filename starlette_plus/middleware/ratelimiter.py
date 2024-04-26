@@ -51,6 +51,10 @@ class RatelimitMiddleware:
         self.app: ASGIApp = app
 
         self._ignore_local: bool = ignore_localhost
+
+        for limit in global_limits:
+            limit["is_global"] = True
+
         self._global_limits: list[RateLimitData] = global_limits
 
         self._store: Store = Store(redis=redis)
@@ -82,11 +86,14 @@ class RatelimitMiddleware:
                 route = r
                 break
 
-        route_limits: list[RateLimitData] = sorted(getattr(route, "limits", []), key=lambda x: x["priority"])
+        route_limits: list[RateLimitData] = sorted(getattr(route, "limits", []), key=lambda x: x.get("priority", 0))
+        for data in route_limits:
+            # Ensure routes are never treated as global limits...
+            data["is_global"] = False
 
         for limit in self._global_limits + route_limits:
             is_exempt: bool = False
-            exempt: ExemptCallable | None = limit["exempt"]
+            exempt: ExemptCallable | None = limit.get("exempt", None)
 
             if exempt is not None:
                 is_exempt: bool = await exempt(request)
@@ -94,16 +101,20 @@ class RatelimitMiddleware:
             if is_exempt:
                 continue
 
-            bucket: BucketType = limit["bucket"]
+            bucket: BucketType = limit.get("bucket", "ip")
             if bucket == "ip":
                 if not request.client and not forwarded:
                     logger.warning("Could not determine the IP address while ratelimiting! Ignoring...")
                     return await self.app(scope, receive, send)
 
                 # forwarded or client.host will exist at this point...
-                key: str = forwarded.split(",")[0] if forwarded else request.client.host  # type: ignore
+                ip: str = forwarded.split(",")[0] if forwarded else request.client.host  # type: ignore
+                if not limit.get("is_global", False) and route:
+                    key = f"{route.name}@{route.path}::{limit['rate']}.{limit['per']}.ip"
+                else:
+                    key = ip
 
-                if self._ignore_local and key in ("127.0.0.1", "::1", "localhost", "0.0.0.0"):
+                if self._ignore_local and ip in ("127.0.0.1", "::1", "localhost", "0.0.0.0"):
                     return await self.app(scope, receive, send)
             else:
                 key: str | None = await bucket(request)

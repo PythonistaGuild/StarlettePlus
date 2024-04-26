@@ -14,7 +14,7 @@ limitations under the License.
 """
 
 from collections.abc import Awaitable, Callable
-from typing import Literal, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 from starlette.requests import Request
 from starlette.responses import Response
@@ -30,6 +30,7 @@ ResponseCallback: TypeAlias = Callable[[Request, float], Awaitable[Response]]
 class RateLimitData(TypedDict):
     rate: int
     per: float
-    bucket: BucketType
-    priority: int
-    exempt: ExemptCallable | None
+    bucket: NotRequired[BucketType]
+    priority: NotRequired[int]
+    exempt: NotRequired[ExemptCallable | None]
+    is_global: NotRequired[bool]

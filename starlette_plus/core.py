@@ -112,12 +112,22 @@ def limit(
     exempt: ExemptCallable | None = None,
 ) -> T_LimitDecorator:
     def decorator(coro: Callable[..., RouteCoro] | _Route) -> LimitDecorator:
-        limits: RateLimitData = {"rate": rate, "per": per, "bucket": bucket, "priority": priority, "exempt": exempt}
+        limits: RateLimitData = {
+            "rate": rate,
+            "per": per,
+            "bucket": bucket,
+            "priority": priority,
+            "exempt": exempt,
+            "is_global": False,
+        }
 
         if isinstance(coro, _Route):
             coro._limits.append(limits)
         else:
-            setattr(coro, "__limits__", [limits])
+            try:
+                coro.__limits__.append(limits)  # type: ignore
+            except AttributeError:
+                setattr(coro, "__limits__", [limits])
 
         return coro
 
