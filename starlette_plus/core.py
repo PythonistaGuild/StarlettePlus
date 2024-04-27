@@ -125,7 +125,7 @@ def limit(
     bucket: BucketType = "ip",
     priority: int = 0,
     exempt: ExemptCallable | None = None,
-    is_global: bool = False
+    is_global: bool = False,
 ) -> T_LimitDecorator:
     def decorator(coro: Callable[..., RouteCoro] | _Route) -> LimitDecorator:
         limits: RateLimitData = {
