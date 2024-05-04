@@ -16,6 +16,7 @@ limitations under the License.
 from __future__ import annotations
 
 import base64
+import copy
 import datetime
 import hashlib
 import json
@@ -121,7 +122,7 @@ class SessionMiddleware:
         except (KeyError, itsdangerous.BadSignature):
             session = {}
 
-        original: dict[str, Any] = session.copy()
+        original: dict[str, Any] = copy.deepcopy(session)
         scope["session"] = session
 
         async def wrapper(message: Message) -> None:
