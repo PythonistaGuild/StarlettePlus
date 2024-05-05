@@ -32,3 +32,4 @@ class RouteOptions(TypedDict):
     prefix: bool
     websocket: bool
     limits: list[RateLimitData]
+    include_in_schema: bool
