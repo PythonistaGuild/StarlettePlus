@@ -215,6 +215,7 @@ class Application(Starlette):
                     endpoint=member,
                     methods=member._methods,
                     name=f"{name}.{member._coro.__name__}",
+                    include_in_schema=member._include_in_schema,
                 )
 
             new.limits = getattr(member, "_limits", [])  # type: ignore
@@ -244,7 +245,13 @@ class Application(Starlette):
                 new = WebSocketRoute(path, endpoint=route_.endpoint, name=route_.name)
             else:
                 methods: list[str] | None = list(route_.methods) if route_.methods else None
-                new = Route(path, endpoint=route_.endpoint, methods=methods, name=route_.name)
+                new = Route(
+                    path,
+                    endpoint=route_.endpoint,
+                    methods=methods,
+                    name=route_.name,
+                    include_in_schema=route_.include_in_schema,
+                )
 
             new.limits = route_.limits  # type: ignore
             self.routes.append(new)
@@ -290,6 +297,7 @@ class View:
                     endpoint=member,
                     methods=member._methods,
                     name=f"{name}.{member._coro.__name__}",
+                    include_in_schema=member._include_in_schema,
                 )
 
             new.limits = getattr(member, "_limits", [])  # type: ignore
