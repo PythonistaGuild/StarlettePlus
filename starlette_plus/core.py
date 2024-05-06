@@ -92,7 +92,7 @@ class _Route:
         self._prefix: bool = kwargs["prefix"]
         self._limits: list[RateLimitData] = kwargs.get("limits", [])
         self._is_websocket: bool = kwargs.get("websocket", False)
-        self._view: View | None = None
+        self._view: View | Application | None = None
         self._include_in_schema: bool = kwargs["include_in_schema"]
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
@@ -117,8 +117,8 @@ def route(
     prefix: bool = True,
     websocket: bool = False,
     include_in_schema: bool = True,
-) -> Callable[..., _Route]:
-    def decorator(coro: Callable[..., RouteCoro]) -> _Route:
+) -> Callable[..., Callable[..., RouteCoro]]:
+    def decorator(coro: Callable[..., RouteCoro]) -> Callable[..., RouteCoro]:
         if not asyncio.iscoroutinefunction(coro):
             raise RuntimeError("Route callback must be a coroutine function.")
 
@@ -127,7 +127,7 @@ def route(
             raise ValueError(f"Route callback function must not be named any: {', '.join(disallowed)}")
 
         limits: list[RateLimitData] = getattr(coro, "__limits__", [])
-        return _Route(
+        route = _Route(
             path=path,
             coro=coro,
             methods=methods,
@@ -136,6 +136,13 @@ def route(
             websocket=websocket,
             include_in_schema=include_in_schema,
         )
+
+        try:
+            coro.__routes__.append(route)  # type: ignore
+        except AttributeError:
+            setattr(coro, "__routes__", [route])
+
+        return coro
 
     return decorator
 
@@ -215,8 +222,11 @@ class Application(Starlette):
         self.__routes__ = []
 
         name: str = cls.__name__
+        members: list[Any] = [
+            r for (_, m) in inspect.getmembers(self, predicate=lambda m: hasattr(m, "__routes__")) for r in m.__routes__
+        ]
 
-        for _, member in inspect.getmembers(self, predicate=lambda m: isinstance(m, _Route)):
+        for member in members:
             member._view = self
             path: str = member._path
 
@@ -294,8 +304,11 @@ class View:
         prefix = cls.__prefix__ or name
 
         self.__routes__ = []
+        members: list[Any] = [
+            r for (_, m) in inspect.getmembers(self, predicate=lambda m: hasattr(m, "__routes__")) for r in m.__routes__
+        ]
 
-        for _, member in inspect.getmembers(self, predicate=lambda m: isinstance(m, _Route)):
+        for member in members:
             member._view = self
             path: str = member._path
 
