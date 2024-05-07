@@ -19,7 +19,7 @@ import redis.asyncio as redis
 class Redis:
     def __init__(self, *, url: str | None = None) -> None:
         url = url or "redis://localhost:6379/0"
-        pool = redis.ConnectionPool.from_url(url)  # type: ignore
+        pool = redis.ConnectionPool.from_url(url, decode_responses=True)  # type: ignore
 
         self.pool: redis.Redis = redis.Redis.from_pool(pool)
 
