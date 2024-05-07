@@ -58,7 +58,7 @@ class Store:
 
     async def set_tat(self, key: str, /, *, tat: datetime.datetime, limit: RateLimit) -> None:
         if self.redis:
-            await self.redis.pool.set(key, tat.isoformat(), ex=limit.period.total_seconds() + 60)  # type: ignore
+            await self.redis.pool.set(key, tat.isoformat(), ex=int(limit.period.total_seconds() + 60))  # type: ignore
         else:
             self._keys[key] = {"tat": tat, "limit": limit}
 
