@@ -13,7 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import asyncio
+import logging
+
 import redis.asyncio as redis
+
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class Redis:
@@ -22,6 +28,35 @@ class Redis:
         pool = redis.ConnectionPool.from_url(url, decode_responses=True)  # type: ignore
 
         self.pool: redis.Redis = redis.Redis.from_pool(pool)
+        self.url = url
+
+        self._could_connect: bool | None = None
+        self._task = asyncio.create_task(self._health_task())
+
+    @property
+    def could_connect(self) -> bool | None:
+        return self._could_connect
 
     async def ping(self) -> bool:
-        return bool(await self.pool.ping())  # type: ignore
+        try:
+            async with asyncio.timeout(3.0):
+                self._could_connect = bool(await self.pool.ping())  # type: ignore
+        except Exception:
+            if self._could_connect is not False:
+                logger.warning(
+                    "Unable to connect to Redis: %s. Services relying on this instance will now be in-memory.", self.url
+                )
+
+            self._could_connect = False
+
+        return self._could_connect
+
+    async def _health_task(self) -> None:
+        while True:
+            previous = self.could_connect
+            await self.ping()
+
+            if not previous and self.could_connect:
+                logger.info("Redis connection has been (re)established: %s", self.url)
+
+            await asyncio.sleep(5)

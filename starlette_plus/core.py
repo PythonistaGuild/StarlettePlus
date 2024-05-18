@@ -34,7 +34,6 @@ from .types_.core import RouteCoro
 if TYPE_CHECKING:
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-    from .redis import Redis
     from .types_.core import Methods, RouteOptions
     from .types_.limiter import BucketType, ExemptCallable, RateLimitData
 
@@ -192,30 +191,11 @@ class Application(Starlette):
         middleware_: list[Middleware] = kwargs.pop("middleware", [])
         middleware_.insert(0, Middleware(LoggingMiddleware)) if self._access_log else None
 
-        statrtups = kwargs.pop("on_startup", [])
-        statrtups.append(self.__startup)
-
-        super().__init__(*args, **kwargs, middleware=middleware_, on_startup=statrtups)  # type: ignore
+        super().__init__(*args, **kwargs, middleware=middleware_)  # type: ignore
 
         self.add_view(self)
         for view in views:
             self.add_view(view)
-
-    async def __startup(self) -> None:
-        for middleware in self.user_middleware:
-            redis: Redis | None = middleware.kwargs.get("redis", None)  # type: ignore
-
-            if not redis:
-                continue
-
-            try:
-                resp: bool = await redis.ping()
-            except Exception:
-                resp = False
-
-            if not resp:
-                logger.warning("Unable to connect to redis on %s, defaulting to in-memory.", middleware.cls.__name__)
-                middleware.kwargs["redis"] = None
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         self: Self = super().__new__(cls)

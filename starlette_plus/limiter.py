@@ -50,14 +50,14 @@ class Store:
     async def get_tat(self, key: str, /) -> datetime.datetime:
         now: datetime.datetime = datetime.datetime.now(tz=datetime.UTC)
 
-        if self.redis:
+        if self.redis and self.redis.could_connect:
             value: str | None = await self.redis.pool.get(key)  # type: ignore
             return datetime.datetime.fromisoformat(value) if value else now  # type: ignore
 
         return self._keys.get(key, {"tat": now}).get("tat", now)
 
     async def set_tat(self, key: str, /, *, tat: datetime.datetime, limit: RateLimit) -> None:
-        if self.redis:
+        if self.redis and self.redis.could_connect:
             await self.redis.pool.set(key, tat.isoformat(), ex=int(limit.period.total_seconds() + 60))  # type: ignore
         else:
             self._keys[key] = {"tat": tat, "limit": limit}

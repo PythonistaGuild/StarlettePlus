@@ -25,7 +25,6 @@ import secrets
 from typing import TYPE_CHECKING, Any
 
 import itsdangerous
-import redis.asyncio as redis
 from starlette.datastructures import MutableHeaders
 from starlette.requests import HTTPConnection
 
@@ -33,7 +32,6 @@ from ..redis import Redis
 
 
 if TYPE_CHECKING:
-    import redis.asyncio as redis
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
     from ..redis import Redis
@@ -43,10 +41,10 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class Storage:
-    __slots__ = ("pool", "_keys")
+    __slots__ = ("redis", "_keys")
 
     def __init__(self, *, redis: Redis | None = None) -> None:
-        self.pool: redis.Redis | None = redis.pool if redis else None
+        self.redis: Redis | None = redis
         self._keys: dict[str, Any] = {}
 
     async def get(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -57,23 +55,23 @@ class Storage:
             await self.delete(key)
             return {}
 
-        if self.pool:
-            session: Any = await self.pool.get(key)  # type: ignore
+        if self.redis and self.redis.could_connect:
+            session: Any = await self.redis.pool.get(key)  # type: ignore
         else:
             session: Any = self._keys.get(key)
 
         return json.loads(session) if session else {}
 
     async def set(self, key: str, value: dict[str, Any], *, max_age: int) -> None:
-        if self.pool:
-            await self.pool.set(key, json.dumps(value), ex=max_age)  # type: ignore
+        if self.redis and self.redis.could_connect:
+            await self.redis.pool.set(key, json.dumps(value), ex=max_age)  # type: ignore
             return
 
         self._keys[key] = json.dumps(value)
 
     async def delete(self, key: str) -> None:
-        if self.pool:
-            await self.pool.delete(key)  # type: ignore
+        if self.redis and self.redis.could_connect:
+            await self.redis.pool.delete(key)  # type: ignore
         else:
             self._keys.pop(key, None)
 
