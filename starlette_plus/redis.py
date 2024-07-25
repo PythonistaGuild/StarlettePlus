@@ -52,11 +52,21 @@ class Redis:
         return self._could_connect
 
     async def _health_task(self) -> None:
-        while True:
-            previous = self.could_connect
-            await self.ping()
+        try:
+            while True:
+                previous = self.could_connect
+                await self.ping()
 
-            if not previous and self.could_connect:
-                logger.info("Redis connection has been (re)established: %s", self.url)
+                if not previous and self.could_connect:
+                    logger.info("Redis connection has been (re)established: %s", self.url)
 
-            await asyncio.sleep(5)
+                await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            logger.warning(
+                'Redis connection: "%s" health check was cancelled. Safe to ignore on shutdown. '
+                "If this was not intentional, all middleware relying on this connection will now be in-memory.",
+                self.url,
+            )
+            self._could_connect = False
+        finally:
+            await self.pool.aclose()
