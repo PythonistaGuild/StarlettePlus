@@ -27,6 +27,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.types import Receive, Scope, Send
+from starlette.websockets import WebSocket
 
 from .types_.core import RouteCoro
 
@@ -95,7 +96,13 @@ class _Route:
         self._include_in_schema: bool = kwargs["include_in_schema"]
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
-        request: Request = Request(scope, receive, send)
+        request: Request | WebSocket
+
+        if self._is_websocket:
+            request = WebSocket(scope, receive, send)
+        else:
+            request = Request(scope, receive, send)
+
         response: Response | None = await self._coro(self._view, request)
 
         if not response:
